@@ -2,49 +2,157 @@ package Vigil::Globals;
 
 use strict;
 use warnings;
+use JSON;
 
-our $VERSION = '1.2.1';
+our $VERSION = '1.3.0';
 
 sub new {
     my ($class) = @_;
     my $self = {
-        _error => '',
+        _error => [],
     };
     bless $self, $class;
     return $self;
 }
 
+sub set { $_[0]->{$_[1]} = $_[2] if defined $_[1]; }
+
 sub append {
-    my ($self, $key, $value) = @_;
-    return unless defined $key;
+    my ($self, @args) = @_;
 
-    my $existing = $self->{$key};
+    # Flatten single argument if it's a hash or array ref
+    if (@args == 1) {
+        if (ref $args[0] eq 'ARRAY') {
+            @args = @{$args[0]};
+        }
+        elsif (ref $args[0] eq 'HASH') {
+            @args = %{$args[0]};
+        }
+    }
 
-    if (ref $existing eq 'ARRAY') {
-        # Existing value is an array reference
-        if (ref $value eq 'ARRAY') {
-            push @$existing, @$value;
-        } else {
-            push @$existing, $value;
+    my %pairs = @args;
+
+    for my $key (keys %pairs) {
+        my $val      = $pairs{$key};
+        my $existing = $self->{$key};
+
+        unless (defined $existing) {
+            $self->{$key} = $val;
+            next;
         }
-    } elsif (ref $existing eq 'HASH') {
-        # Existing value is a hash reference
-        if (ref $value eq 'HASH') {
-            # Merge keys from $value into existing hash
-            @$existing{keys %$value} = values %$value;
-        } else {
-            die "Cannot append non-hash value to a hashref";
+
+        # Scalar handling
+        if (!ref $existing) {
+            if (!ref $val) {
+                $self->{$key} .= $val;
+            }
+            elsif (ref $val eq 'ARRAY') {
+                $self->{$key} = [ $existing, @$val ];
+            }
+            elsif (ref $val eq 'HASH') {
+                push @{ $self->{_error} }, "Cannot append hashref to scalar key '$key'";
+            }
+            next;
         }
-    } else {
-        # Existing value is scalar or undef
-        $existing //= '';
-        $self->{$key} = $existing . $value;
+
+        # Array handling
+        if (ref $existing eq 'ARRAY') {
+            $self->_merge_array($existing, $val);
+            next;
+        }
+
+        # Hash handling
+        if (ref $existing eq 'HASH') {
+            if (!ref $val) {
+                push @{ $self->{_error} }, "Cannot append scalar to hash key '$key'";
+            }
+            elsif (ref $val eq 'ARRAY') {
+                if (@$val % 2) {
+                    push @{ $self->{_error} }, "Array must have even number of elements to append as hash key '$key'";
+                } else {
+                    while (@$val) {
+                        my $k = shift @$val;
+                        my $v = shift @$val;
+                        $existing->{$k} = $v;
+                    }
+                }
+            }
+            elsif (ref $val eq 'HASH') {
+                $self->_merge_hash($existing, $val);
+            }
+            next;
+        }
+
+        push @{ $self->{_error} }, "Unsupported type for key '$key'";
     }
 }
 
-sub set { $_[0]->{$_[1]} = $_[2] if defined $_[1]; }
+sub append_json {
+    my ($self, $json) = @_;
+    return unless defined $json && length $json;
 
-sub read { return $_[0]->{$_[1]} if defined $_[1]; }
+    my $data = eval { JSON::decode_json($json) };
+    if ($@) {
+        push @{ $self->{_error} }, "Failed to parse JSON: $@";
+        return;
+    }
+
+    unless (ref $data eq 'HASH') {
+        push @{ $self->{_error} }, "Top-level JSON must be an object/hash";
+        return;
+    }
+
+    for my $key (keys %$data) {
+        my $val = $data->{$key};
+
+        if (exists $self->{$key}) {
+            my $existing = $self->{$key};
+
+            if (!ref($existing) && !ref($val)) {
+                # Concatenate scalars
+                $self->{$key} .= $val;
+            }
+            elsif (ref($existing) eq 'ARRAY' && ref($val) eq 'ARRAY') {
+                # Merge arrays
+                $self->_merge_array($existing, $val);
+            }
+            elsif (ref($existing) eq 'HASH' && ref($val) eq 'HASH') {
+                # Merge hashes recursively
+                $self->_merge_hash($existing, $val);
+            }
+            else {
+                # Incompatible types → overwrite
+                $self->{$key} = $val;
+            }
+        }
+        else {
+            # Key doesn't exist → create it
+            $self->{$key} = $val;
+        }
+    }
+}
+
+sub export_as_json { return encode_json({ map { $_ => $_[0]->{$_} } grep { $_ ne '_error' } keys %{$_[0]} }); }
+
+sub to_jsonORIGINAL {
+    my ($self) = @_;
+    
+    # Copy all keys except _error
+    my %data = map { $_ => $self->{$_} } grep { $_ ne '_error' } keys %$self;
+
+    # Convert to JSON string
+    return encode_json(\%data);
+}
+
+sub read {
+    my ($self, $key) = @_;
+    return unless defined $key;            
+    my $val = $self->{$key};
+
+    return $val if ref($val) eq 'ARRAY' || ref($val) eq 'HASH';
+
+    return defined $val ? $val : '';
+}
 
 sub delete { delete $_[0]->{$_[1]} unless $_[1] =~ /^_/; }
 
@@ -55,6 +163,32 @@ sub exists { return exists $_[0]->{$_[1]}; }
 sub allkeys { return sort { lc($a) cmp lc($b) } grep { $_ !~ /^_/ } keys %{$_[0]}; }
 
 sub allvalues { return map { $_[0]->{$_} } sort { lc($a) cmp lc($b) } grep { $_ !~ /^_/ } keys %{$_[0]}; }
+
+sub _merge_array {
+    my ($self, $target, $source) = @_;
+
+    if (!ref $source) {
+        push @$target, $source;
+    }
+    elsif (ref $source eq 'ARRAY') {
+        push @$target, @$source;
+    }
+    else {
+        push @{ $self->{errors} }, "Cannot merge non-array into array";
+    }
+}
+
+sub _merge_hash {
+    my ($self, $target, $source) = @_;
+
+    for my $k (keys %$source) {
+        if (exists $target->{$k} && ref $target->{$k} eq 'HASH' && ref $source->{$k} eq 'HASH') {
+            $self->_merge_hash($target->{$k}, $source->{$k});  # recursive merge
+        } else {
+            $target->{$k} = $source->{$k};
+        }
+    }
+}
 
 1;
 
@@ -140,6 +274,15 @@ If you append a list ref or hash ref, they are joined appropriately.
 
     $obj->append($key, $more_hash_ref);  #Existing value is hash ref - merges the keys/values from the new hash reference.
 
+=item $obj->append_json(JSON_STRING);
+
+No key names are needed, they are taken from the JSON string itself. This method will merge the contents of the JSON string with existing keys, or create new keys if none exist.
+
+I<NOTE: If you want to replace data with the contents of the JSON string, you should first C<delete(KEYNAME)> that key/value pair or completely C<empty()> the object.>
+
+=item my $json_string = $obj->export_as_json;
+
+This will export the entire contents of the object (except for the errors) to a propely formatted JSON string.
 
 =item $obj->read(KEY);
 

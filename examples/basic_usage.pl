@@ -2,10 +2,8 @@
 use strict;
 use warnings;
 use Test::More;
-
 #use FindBin;
 #use lib "$FindBin::Bin/../lib";
-
 use Vigil::Globals;
 
 my $globals = Vigil::Globals->new;
@@ -96,6 +94,22 @@ use Data::Dumper;
 $Data::Dumper::Sortkeys = 1;
 print Dumper $globals;
 print "\n\n";
+
+print "Now we are going to APPEND to the object from a JSON string.\n\n";
+my $json_example = '{"cartid": 834770,"categories_visited": ["radio","laptop","gardening supplies","tablet","smartwatch"],"matrix": [[1,2],[3,4]],"custid": 123,"settings": {"bottom": 15,"prefs": {"color": "#111","text-size": "14pt","font-family": "verdana","line-height": 1.5,"side": 10,"top": 15}}}';
+print "Here is the JSON string:\n$json_example\n\n";
+print "Now we APPEND the JSON:\n";
+$globals->append_json($json_example);
+print "print \$obj->from_json(\$json_string);\n";
+print "... and now we see the object contains:\n\n";
+$Data::Dumper::Sortkeys = 1;
+print Dumper $globals;
+print "\n\n";
+
+print "Finally, we print the contents back out to a JSON string:\n";
+print "my \$new_json_string = \$obj->to_json;\n\n";
+my $new_json_string = $globals->export_as_json;
+print "$new_json_string\n\n";
 
 use MIME::Base64;
 print decode_base64('RGVtbyBmaW5pc2hlZDogTXkgS3VuZy1GdSBpcyBzdHJvbmcuLi4='), "\n";

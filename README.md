@@ -1,99 +1,100 @@
-NAME
+# NAME
 
-    Vigil::Globals - Used to create a name space for global variables,
-    accessible from one place.
+Vigil::Globals - Used to create a name space for global variables, accessible from one place.
 
-SYNOPSIS
+# SYNOPSIS
 
-        use Vigil::Globals;
-        my $global = Vigil::Globals->new;
+    use Vigil::Globals;
+    my $global = Vigil::Globals->new;
+        
+    my $first_name = 'Harry';
+    my $last_name = ' Jones';
+        
+    $obj->set('name', $first_name);
+    print $obj->read('name');         #Prints: Harry
+        
+    $obj->append('name', $last_name);
+    print $obj->read('name');         #Prints: Harry Jones
+
+# CLASS METHODS
+
+- $obj->new;
+
+    The object constructor takes no arguments.
+
+# OBJECT METHODS
+
+- $obj->set(KEY, VALUE);
+
+    This method allows you to add a key/value pair to the object. The key will always be a string - if you pass numbers of floats (decimal numbers), they will be converted to strings for the purpose of a key. Anything else passed as a string will cause problems for you in trying to retrieve them.
+
+    Here are the different ways to add various types of values:
+
+    \* This will always return a string with read()
+
+        $obj->set($keyname, $value);
             
-        my $first_name = 'Harry';
-        my $last_name = ' Jones';
+        #This will only store the first item passed, "foo."
             
-        $obj->set('name', $first_name);
-        print $obj->read('name');         #Prints: Harry
+        $obj->set($keyname, 'foo', 'bar', 'baz');
             
-        $obj->append('name', $last_name);
-        print $obj->read('name');         #Prints: Harry Jones
 
-CLASS METHODS
+    \* These will always return an array ref
 
-    $obj->new;
+        $obj->set('key', \@array);
+            
+        $obj->set('key', ['little', 'boy', 'blue']);
+            
+        $obj->set('key', $array_ref);
 
-      The object constructor takes no arguments.
+    \* These will always return a hash ref
 
-OBJECT METHODS
+        $obj->set('key', \%hash);
 
-    $obj->set(KEY, VALUE);
+        $obj->set('key', { 'foo' => 'bar', 'baz' => 'qux' });
 
-      This method allows you to add a key/value pair to the object. The key
-      will always be a string - if you pass numbers of floats (decimal
-      numbers), they will be converted to strings for the purpose of a key.
-      Anything else passed as a string will cause problems for you in
-      trying to retrieve them.
+        $obj->set('key', $hash_ref);
 
-      Here are the different ways to add various types of values:
+- $obj->append(KEY, VALUE);
 
-      * This will always return a string with read()
+    The rules for the `append()` method are basically the same as for `set()`.
 
-          $obj->set($keyname, $value);
-              
-          #This will only store the first item passed, "foo."
-              
-          $obj->set($keyname, 'foo', 'bar', 'baz');
-              
+    If you append a string to a string, the method will concatenate exactly what is passed to it, to the existing value.
 
-      * These will always return an array ref
+    If you append a list ref or hash ref, they are joined appropriately.
 
-          $obj->set('key', \@array);
-              
-          $obj->set('key', ['little', 'boy', 'blue']);
-              
-          $obj->set('key', $array_ref);
+        $obj->append($key, $value);          #If existing value is scalar (or undef), concatenates.
 
-      * These will always return a hash ref
+        $obj->append($key, \@more_items);    #Existing value is an array ref - pushes all elements from the array reference.
 
-          $obj->set('key', \%hash);
-      
-          $obj->set('key', { 'foo' => 'bar', 'baz' => 'qux' });
-      
-          $obj->set('key', $hash_ref);
+        $obj->append($key, $more_items_ref); #Existing value is an array ref - pushes all elements from the array reference.
 
-    $obj->append(KEY, VALUE);
+        $obj->append($key, \%hash);          #Existing value is hash ref - merges the keys/values from the new hash reference.
 
-      The rules for the append() method are basically the same as for
-      set().
+        $obj->append($key, $more_hash_ref);  #Existing value is hash ref - merges the keys/values from the new hash reference.
 
-      If you append a string to a string, the method will concatenate
-      exactly what is passed to it, to the existing value.
+- $obj->append\_json(JSON\_STRING);
 
-      If you append a list ref or hash ref, they are joined appropriately.
+    No key names are needed, they are taken from the JSON string itself. This method will merge the contents of the JSON string with existing keys, or create new keys if none exist.
 
-          $obj->append($key, $value);          #If existing value is scalar (or undef), concatenates.
-      
-          $obj->append($key, \@more_items);    #Existing value is an array ref - pushes all elements from the array reference.
-      
-          $obj->append($key, $more_items_ref); #Existing value is an array ref - pushes all elements from the array reference.
-      
-          $obj->append($key, \%hash);          #Existing value is hash ref - merges the keys/values from the new hash reference.
-      
-          $obj->append($key, $more_hash_ref);  #Existing value is hash ref - merges the keys/values from the new hash reference.
+    _NOTE: If you want to replace data with the contents of the JSON string, you should first `delete(KEYNAME)` that key/value pair or completely `empty()` the object._
 
-    $obj->read(KEY);
+- my $json\_string = $obj->export\_as\_json;
 
-      The read method will return exactly what was stored. If you store a
-      string, it returns a string. If store an array ref or hash ref, that
-      is what you will get back.
+    This will export the entire contents of the object (except for the errors) to a propely formatted JSON string.
 
-      * String stored
+- $obj->read(KEY);
 
-          my $value = $obj->get($key);
-          print $obj->get($key);
-          push(@my_array, $obj->get($key));
-              
+    The read method will return exactly what was stored. If you store a string, it returns a string. If store an array ref or hash ref, that is what you will get back.
 
-      * Array reference stored
+    \* String stored
+
+        my $value = $obj->get($key);
+        print $obj->get($key);
+        push(@my_array, $obj->get($key));
+            
+
+    \* Array reference stored
 
           my $array_ref = $obj->get($array_ref_key);
           print $array_ref->[0];
@@ -102,79 +103,71 @@ OBJECT METHODS
           my @convert_to_list = @{ $obj->get($array_ref_key) };
         
 
-      * Hash reference is stored
+    \* Hash reference is stored
 
-          my $hash_ref = $obj->get($hash_ref_key);
-          print $hash_ref->{foo};
-          print $hash_ref->{baz};
-          #Merge to existing %hash
-          @hash{ keys %$hash_ref } = values %_hash_ref;
-          my %convert_to_hash = %{ $obj->get($hash_ref_key) };
+        my $hash_ref = $obj->get($hash_ref_key);
+        print $hash_ref->{foo};
+        print $hash_ref->{baz};
+        #Merge to existing %hash
+        @hash{ keys %$hash_ref } = values %_hash_ref;
+        my %convert_to_hash = %{ $obj->get($hash_ref_key) };
 
-    $obj->delete(KEY);
+- $obj->delete(KEY);
 
-      Removes the specified key/value pair from the object.
+    Removes the specified key/value pair from the object.
 
-    $obj->exists(KEY);
+- $obj->exists(KEY);
 
-      Returns true if the key is in the object, it returns false if not.
+    Returns true if the key is in the object, it returns false if not.
 
-    $obj->allkeys;
+- $obj->allkeys;
 
-      Returns all the user-added keys in a sorted asciibetical order.
+    Returns all the user-added keys in a sorted asciibetical order.
 
-    $obj->allvalues;
+- $obj->allvalues;
 
-      Returns all the user-added values sorted in asciibetical order of the
-      keys.
+    Returns all the user-added values sorted in asciibetical order of the keys.
 
- Local Installation
+## Local Installation
 
-    If your host does not allow you to install from CPAN, then you can
-    install this module locally two ways:
+If your host does not allow you to install from CPAN, then you can install this module locally two ways:
 
-      * Same Directory
+- Same Directory
 
-      In the same directory as your script, create a subdirectory called
-      "Vigil". Then add these two lines, in this order, to your script:
+    In the same directory as your script, create a subdirectory called "Vigil". Then add these two lines, in this order, to your script:
 
-              use lib '.';            # Add current directory to @INC
-              use Vigil::Globals; # Now Perl can find the module in the same dir
-              
-              #Then call it as normal:
-              my $qs_obj = Vigil::Globals->new;
+            use lib '.';            # Add current directory to @INC
+            use Vigil::Globals; # Now Perl can find the module in the same dir
+            
+            #Then call it as normal:
+            my $qs_obj = Vigil::Globals->new;
 
-      * In a different directory
+- In a different directory
 
-      First, create a subdirectory called "Vigil" then add it to @INC array
-      through a BEGIN{} block in your script:
+    First, create a subdirectory called "Vigil" then add it to `@INC` array through a `BEGIN{}` block in your script:
 
-              #!/usr/bin/perl
-              BEGIN {
-                      push(@INC, '/path/on/server/to/Vigil');
-              }
-              
-              use Vigil::Globals;
-              
-              #Then call it as normal:
-              my $qs_obj = Vigil::Globals->new;
+            #!/usr/bin/perl
+            BEGIN {
+                    push(@INC, '/path/on/server/to/Vigil');
+            }
+            
+            use Vigil::Globals;
+            
+            #Then call it as normal:
+            my $qs_obj = Vigil::Globals->new;
 
-AUTHOR
+# AUTHOR
 
-    Jim Melanson (jmelanson1965@gmail.com).
+Jim Melanson (jmelanson1965@gmail.com).
 
-    Created: October, 2019.
+Created: October, 2019.
 
-    Last Update: August 2025.
+Last Update: August 2025.
 
-    License: Use it as you will, and don't pretend you wrote it - be a
-    mensch.
+License: Use it as you will, and don't pretend you wrote it - be a mensch.
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
-    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-    TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-    SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
